@@ -1,0 +1,25 @@
+# Runbook: vertical scaling / right-sizing / rollback of the app container.
+# The AIOps engine passes cpus, memory and memory_swap (-e) for the target level.
+- name: Apply resource limits to the application container
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  vars:
+    container: app
+    cpus: "0.5"
+    memory: "512m"
+    memory_swap: "1g"
+
+  tasks:
+    - name: Apply CPU and memory limits (docker update, no downtime)
+      command: docker update --cpus {{ cpus }} --memory {{ memory }} --memory-swap {{ memory_swap }} {{ container }}
+
+    - name: Verify applied limits
+      command: docker inspect -f "{{ '{{' }}.HostConfig.NanoCpus{{ '}}' }} {{ '{{' }}.HostConfig.Memory{{ '}}' }}" {{ container }}
+      register: limits
+      changed_when: false
+
+    - name: Show limits
+      debug:
+        msg: "{{ container }} limits now {{ limits.stdout }}"

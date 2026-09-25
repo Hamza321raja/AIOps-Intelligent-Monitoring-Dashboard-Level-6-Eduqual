@@ -1,0 +1,9 @@
+# Run on the VM host (not inside a container): rolling restart of the edge app
+- name: Restart Kubernetes edge deployment
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  tasks:
+    - name: Rolling restart of edge-app
+      command: k3s kubectl rollout restart deployment edge-app

@@ -1,0 +1,8 @@
+# Generic manual remediation entry point:
+#   ansible-playbook remediation.yml -e action=restart|scale_up|scale_down
+- import_playbook: restart_app.yml
+  when: action | default('restart') == 'restart'
+- import_playbook: scale_up.yml
+  when: action | default('restart') == 'scale_up'
+- import_playbook: scale_down.yml
+  when: action | default('restart') == 'scale_down'

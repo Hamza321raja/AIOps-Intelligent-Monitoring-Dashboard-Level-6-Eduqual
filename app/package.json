@@ -1,0 +1,15 @@
+{
+  "name": "aiops-backend",
+  "version": "1.0.0",
+  "main": "server.js",
+  "dependencies": {
+    "@opentelemetry/sdk-node": "^0.215.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.73.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.51.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "os-utils": "^0.0.14",
+    "prom-client": "^15.1.0",
+    "winston": "^3.19.0"
+  }
+}

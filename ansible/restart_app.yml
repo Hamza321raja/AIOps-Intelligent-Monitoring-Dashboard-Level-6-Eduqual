@@ -1,0 +1,25 @@
+# Runbook: restart the application container (called by the AIOps engine)
+- name: Restart application container
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  vars:
+    container_name: app
+
+  tasks:
+    - name: Record state before restart
+      command: docker inspect -f "{{ '{{' }}.State.Status{{ '}}' }} restarts={{ '{{' }}.RestartCount{{ '}}' }}" {{ container_name }}
+      register: before
+      changed_when: false
+
+    - name: Restart container
+      command: docker restart {{ container_name }}
+
+    - name: Wait until the container is running
+      command: docker inspect -f "{{ '{{' }}.State.Running{{ '}}' }}" {{ container_name }}
+      register: running
+      until: running.stdout == "true"
+      retries: 10
+      delay: 2
+      changed_when: false

@@ -1,0 +1,47 @@
+# Intelligent alert routing: group by alert + service (fingerprint-based
+# de-duplication), 5-minute group interval, priority-based routing and
+# inhibition rules that suppress symptom alerts when the cause is known.
+route:
+  receiver: "aiops-engine"
+  group_by: ["alertname", "service"]
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 1h
+  routes:
+    - matchers: ['priority="P1"']
+      receiver: "aiops-p1"
+      group_wait: 5s
+      repeat_interval: 15m
+    - matchers: ['priority="P2"']
+      receiver: "aiops-p2"
+      repeat_interval: 30m
+    - matchers: ['priority=~"P3|P4"']
+      receiver: "aiops-engine"
+      repeat_interval: 4h
+
+inhibit_rules:
+  # App down: suppress every other app alert (they are symptoms)
+  - source_matchers: ['alertname="AppDown"']
+    target_matchers: ['priority=~"P2|P3|P4"']
+    equal: ["service"]
+  # SLO breach already covers the error-rate alert
+  - source_matchers: ['alertname="SLOAvailabilityBreach"']
+    target_matchers: ['alertname="HighErrorRate"']
+    equal: ["service"]
+  # Edge down: suppress edge CPU alerts
+  - source_matchers: ['alertname="EdgeDown"']
+    target_matchers: ['alertname="EdgeHighCPU"']
+
+receivers:
+  - name: "aiops-p1"
+    webhook_configs:
+      - url: "http://aiops-engine:8000/alerts"
+        send_resolved: true
+  - name: "aiops-p2"
+    webhook_configs:
+      - url: "http://aiops-engine:8000/alerts"
+        send_resolved: true
+  - name: "aiops-engine"
+    webhook_configs:
+      - url: "http://aiops-engine:8000/alerts"
+        send_resolved: true

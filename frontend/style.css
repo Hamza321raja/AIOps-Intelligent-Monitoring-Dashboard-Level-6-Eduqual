@@ -1,0 +1,36 @@
+body { font-family: "Segoe UI", Arial, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; }
+.container { max-width: 1280px; margin: auto; padding: 20px; }
+header { text-align: center; margin-bottom: 18px; }
+h1 { margin: 0 0 6px; }
+.sub { color: #94a3b8; margin: 0 0 10px; }
+nav a { color: #93c5fd; margin: 0 8px; text-decoration: none; }
+nav a:hover { text-decoration: underline; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.kpi { background: #1e293b; border-radius: 10px; padding: 12px; text-align: center; }
+.kpi span { display: block; color: #94a3b8; font-size: 12px; margin-bottom: 4px; }
+.kpi b { font-size: 20px; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.card { background: #1e293b; padding: 16px 18px; border-radius: 10px; min-width: 0; }
+.card h3 { margin-top: 0; }
+.full { grid-column: span 2; }
+button { margin: 4px; padding: 9px 13px; border: none; border-radius: 6px; cursor: pointer; background: #2563eb; color: white; }
+button:hover { opacity: .85; }
+.stop { background: #dc2626; }
+.muted { color: #94a3b8; }
+.ok { color: #4ade80; }
+.bad { color: #f87171; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.kv td { padding: 4px 6px; border-bottom: 1px solid #334155; vertical-align: top; }
+.kv td:first-child { color: #94a3b8; width: 45%; }
+.list th, .list td { padding: 5px 6px; border-bottom: 1px solid #334155; text-align: left; vertical-align: top; }
+.list th { color: #94a3b8; font-weight: 600; }
+.scroll { overflow-x: auto; max-height: 360px; overflow-y: auto; }
+.p-P1 td:nth-child(2) { color: #f87171; font-weight: 700; }
+.p-P2 td:nth-child(2) { color: #fb923c; font-weight: 700; }
+.p-P3 td:nth-child(2) { color: #facc15; }
+.st-RESOLVED { color: #4ade80; }
+.st-ESCALATED { color: #f87171; font-weight: 700; }
+.st-REMEDIATING, .st-RECOVERING { color: #facc15; }
+.maint { border-left: 3px solid #f59e0b; padding: 4px 8px; margin-bottom: 8px; }
+pre { white-space: pre-wrap; font-size: 12px; background: #0f172a; padding: 10px; border-radius: 6px; max-height: 300px; overflow: auto; }
+@media (max-width: 800px) { .grid { grid-template-columns: 1fr; } .full { grid-column: span 1; } }

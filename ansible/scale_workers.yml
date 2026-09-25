@@ -1,0 +1,2 @@
+# Deprecated: the app is scaled vertically with scale_app.yml.
+- import_playbook: scale_up.yml

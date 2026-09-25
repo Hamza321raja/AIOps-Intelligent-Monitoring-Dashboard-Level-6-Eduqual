@@ -1,0 +1,163 @@
+# Alert rules with P1-P4 priorities. Alertmanager groups, de-duplicates,
+# inhibits (suppresses) and routes them by priority to the AIOps engine.
+groups:
+
+  # ============ SLI recording rules (SLA / SLO) ============
+  - name: sli-recording
+    rules:
+      - record: sli:availability:ratio_5m
+        expr: sum(rate(http_requests_total{job="onprem-app",status!~"5.."}[5m])) / sum(rate(http_requests_total{job="onprem-app"}[5m]))
+      - record: sli:availability:ratio_1h
+        expr: sum(rate(http_requests_total{job="onprem-app",status!~"5.."}[1h])) / sum(rate(http_requests_total{job="onprem-app"}[1h]))
+      - record: sli:latency_p95:seconds_5m
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job="onprem-app"}[5m])))
+      - record: sli:error_budget_remaining:ratio_1h
+        expr: 1 - ((1 - sli:availability:ratio_1h) / (1 - 0.99))
+      - record: app:cpu_baseline:avg_1h
+        expr: avg_over_time(aiops_cpu_utilization_percent[1h])
+      - record: app:cpu_baseline:stddev_1h
+        expr: stddev_over_time(aiops_cpu_utilization_percent[1h])
+
+  # ============ P1 - critical, customer impact ============
+  - name: p1-critical
+    rules:
+      - alert: AppDown
+        expr: up{job="onprem-app"} == 0
+        for: 10s
+        labels: {severity: critical, priority: P1, service: app}
+        annotations:
+          summary: "On-prem application is down"
+          description: "Prometheus cannot scrape app:3000."
+      - alert: SLOAvailabilityBreach
+        expr: sli:availability:ratio_5m < 0.99
+        for: 1m
+        labels: {severity: critical, priority: P1, service: app}
+        annotations:
+          summary: "Availability SLO (99%) breached"
+          description: "5-minute availability is {{ $value | humanizePercentage }}."
+      - alert: AutomationCircuitBreakerOpen
+        expr: aiops_circuit_breaker_open == 1
+        labels: {severity: critical, priority: P1, service: aiops-engine}
+        annotations:
+          summary: "Automated remediation paused by the circuit breaker"
+
+  # ============ P2 - major ============
+  - name: p2-major
+    rules:
+      - alert: HighErrorRate
+        expr: sum(rate(http_requests_total{job="onprem-app",status=~"5.."}[1m])) / sum(rate(http_requests_total{job="onprem-app"}[1m])) > 0.05
+        for: 30s
+        labels: {severity: major, priority: P2, service: app}
+        annotations:
+          summary: "Error rate above 5%"
+          description: "Current error ratio {{ $value | humanizePercentage }}."
+      - alert: HighLatencyP95
+        expr: sli:latency_p95:seconds_5m > 1
+        for: 1m
+        labels: {severity: major, priority: P2, service: app}
+        annotations:
+          summary: "p95 latency above the 1s SLO"
+      - alert: EdgeDown
+        expr: up{job="kubernetes-edge"} == 0
+        for: 30s
+        labels: {severity: major, priority: P2, service: kubernetes-edge}
+        annotations:
+          summary: "Kubernetes edge app unreachable"
+      - alert: HostHighMemory
+        expr: 100 * node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 10
+        for: 1m
+        labels: {severity: major, priority: P2, service: ec2-host}
+        annotations:
+          summary: "EC2 host memory available below 10%"
+      - alert: ProbeFailed
+        expr: probe_success == 0
+        for: 30s
+        labels: {severity: major, priority: P2, service: network}
+        annotations:
+          summary: "Network probe to {{ $labels.instance }} failing"
+      - alert: AIOpsEngineDown
+        expr: up{job="aiops-engine"} == 0
+        for: 30s
+        labels: {severity: major, priority: P2, service: aiops-engine}
+        annotations:
+          summary: "AIOps engine is not reporting"
+
+  # ============ P3 - warning / predictive ============
+  - name: p3-warning
+    rules:
+      - alert: AppHighCPU
+        expr: aiops_cpu_utilization_percent > 85
+        for: 30s
+        labels: {severity: warning, priority: P3, service: app}
+        annotations:
+          summary: "App CPU above 85% of its limit"
+      - alert: MemoryExhaustionPredicted
+        expr: predict_linear(process_resident_memory_bytes{job="onprem-app"}[5m], 1800) > 480 * 1024 * 1024
+        for: 1m
+        labels: {severity: warning, priority: P3, service: app}
+        annotations:
+          summary: "App memory predicted to reach its 512 MB limit within 30 minutes"
+      - alert: AIOpsHighFailureRisk
+        expr: aiops_failure_risk == 2
+        for: 30s
+        labels: {severity: warning, priority: P3, service: app}
+        annotations:
+          summary: "LSTM model predicts CPU saturation"
+      - alert: DiskWillFillIn24h
+        expr: predict_linear(node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}[1h], 24 * 3600) < 0
+        for: 5m
+        labels: {severity: warning, priority: P3, service: ec2-host}
+        annotations:
+          summary: "Root disk predicted to fill within 24 hours"
+      - alert: HostDiskIOSaturation
+        expr: rate(node_disk_io_time_seconds_total[5m]) > 0.9
+        for: 2m
+        labels: {severity: warning, priority: P3, service: ec2-host}
+        annotations:
+          summary: "Disk I/O saturated on {{ $labels.device }}"
+      - alert: HostHighCPU
+        expr: 100 - 100 * avg(rate(node_cpu_seconds_total{mode="idle"}[2m])) > 90
+        for: 2m
+        labels: {severity: warning, priority: P3, service: ec2-host}
+        annotations:
+          summary: "EC2 host CPU above 90%"
+      - alert: EdgeHighCPU
+        expr: edge_cpu_usage > 90
+        for: 20s
+        labels: {severity: warning, priority: P3, service: kubernetes-edge}
+        annotations:
+          summary: "Edge CPU above 90%"
+      - alert: HighProbeLatency
+        expr: probe_duration_seconds > 1
+        for: 1m
+        labels: {severity: warning, priority: P3, service: network}
+        annotations:
+          summary: "Slow network path to {{ $labels.instance }}"
+      - alert: ComplianceViolation
+        expr: aiops_compliance_violations > 0
+        for: 1m
+        labels: {severity: warning, priority: P3, service: aiops-engine}
+        annotations:
+          summary: "{{ $value }} compliance control(s) failing"
+
+  # ============ P4 - informational / baseline ============
+  - name: p4-info
+    rules:
+      - alert: AIOpsAnomalyDetected
+        expr: aiops_anomaly == 1
+        for: 15s
+        labels: {severity: info, priority: P4, service: app}
+        annotations:
+          summary: "ML ensemble (IsolationForest + z-score) confirmed an anomaly"
+      - alert: PerformanceDrift
+        expr: aiops_drift_score > 3
+        for: 2m
+        labels: {severity: info, priority: P4, service: app}
+        annotations:
+          summary: "Performance drifted from its learned baseline"
+      - alert: CPUBaselineDeviation
+        expr: (aiops_cpu_utilization_percent - app:cpu_baseline:avg_1h) > 3 * app:cpu_baseline:stddev_1h and app:cpu_baseline:stddev_1h > 0
+        for: 1m
+        labels: {severity: info, priority: P4, service: app}
+        annotations:
+          summary: "CPU more than 3 standard deviations above its 1h baseline"

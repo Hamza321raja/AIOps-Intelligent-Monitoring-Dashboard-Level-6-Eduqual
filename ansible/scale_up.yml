@@ -1,0 +1,7 @@
+# Manual runbook: scale the app up to level 1 (1 CPU / 768 MB).
+# The AIOps engine uses scale_app.yml with explicit values.
+- import_playbook: scale_app.yml
+  vars:
+    cpus: "1.0"
+    memory: "768m"
+    memory_swap: "1536m"

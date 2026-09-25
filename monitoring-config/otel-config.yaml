@@ -1,0 +1,44 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # protect the collector's memory, then batch for efficient export
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 200
+  batch:
+  # enrich every span/metric with environment metadata (normalisation)
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: aiops-demo
+        action: upsert
+      - key: cloud.provider
+        value: aws
+        action: upsert
+
+exporters:
+  otlphttp/jaeger:
+    endpoint: http://jaeger:4318
+    tls:
+      insecure: true
+  prometheus:
+    endpoint: 0.0.0.0:8889
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlphttp/jaeger]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [prometheus]

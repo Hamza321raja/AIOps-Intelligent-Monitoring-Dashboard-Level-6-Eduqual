@@ -1,0 +1,5 @@
+numpy<1.25
+scikit-learn<1.4
+mlflow<2.18
+requests
+prometheus_client<0.22

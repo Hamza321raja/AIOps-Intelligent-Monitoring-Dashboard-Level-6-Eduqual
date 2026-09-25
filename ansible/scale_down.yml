@@ -1,0 +1,6 @@
+# Manual runbook: restore the app to its baseline limits (0.5 CPU / 512 MB).
+- import_playbook: scale_app.yml
+  vars:
+    cpus: "0.5"
+    memory: "512m"
+    memory_swap: "1g"

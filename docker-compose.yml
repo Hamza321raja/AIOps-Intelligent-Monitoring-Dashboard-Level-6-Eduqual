@@ -1,0 +1,303 @@
+# AIOps Intelligent Monitoring Platform - hybrid cloud demo
+#   on-prem : app + frontend (Docker)      edge : edge-app on k3s (NodePort 30007)
+#   cloud   : AWS EC2 host (node-exporter) network : blackbox probes
+# Secrets can be overridden in a .env file next to this file.
+
+x-logging: &default-logging
+  driver: json-file
+  options: {max-size: "10m", max-file: "3"}
+
+services:
+
+  # =========================
+  # 🔹 FRONTEND (dashboard + load generator + fault injection)
+  # =========================
+  frontend:
+    image: nginx:1.27-alpine
+    container_name: frontend
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8080:80"
+    depends_on: [app, aiops-engine]
+    cpus: "0.25"
+    mem_limit: 128m
+    restart: always
+    logging: *default-logging
+
+  # =========================
+  # 🔹 APP (ON-PREM BUSINESS SERVICE, OTEL INSTRUMENTED)
+  # =========================
+  app:
+    build: ./app
+    image: aiops-app:1.0
+    container_name: app
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - OTEL_SERVICE_NAME=aiops-app
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+    depends_on: [otel-collector]
+    cpus: "0.50"
+    mem_limit: 512m
+    restart: always
+    logging: *default-logging
+
+  # =========================
+  # 🔹 AIOPS ENGINE (ML, RCA, decision, remediation, SLA, compliance)
+  # =========================
+  aiops-engine:
+    build: ./aiops-engine
+    image: aiops-engine:1.0
+    container_name: aiops-engine
+    ports:
+      - "8000:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./aiops-engine:/app
+      - ./ansible:/ansible:ro
+      - ./logs:/app/logs
+    environment:
+      - ANSIBLE_CONFIG=/ansible/ansible.cfg
+      - TF_CPP_MIN_LOG_LEVEL=2
+      - PYTHONUNBUFFERED=1
+      - AIRFLOW_USER=admin
+      - AIRFLOW_PASSWORD=${AIRFLOW_ADMIN_PASSWORD:-admin}
+      - AUTO_REMEDIATE_MIN_CONFIDENCE=0.7
+      - SLO_AVAILABILITY=99.0
+      - SLO_P95_LATENCY=1.0
+      - NOTIFY_WEBHOOK_URL=${NOTIFY_WEBHOOK_URL:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on: [prometheus, loki, mlflow]
+    cpus: "1.0"
+    mem_limit: 1536m
+    restart: always
+    logging: *default-logging
+
+  # =========================
+  # 🔹 OTEL COLLECTOR
+  # =========================
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.104.0
+    container_name: otel-collector
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./monitoring-config/otel-config.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    depends_on: [jaeger]
+    cpus: "0.50"
+    mem_limit: 256m
+    restart: always
+    logging: *default-logging
+
+  # =========================
+  # 🔹 JAEGER (TRACES)
+  # =========================
+  jaeger:
+    image: jaegertracing/all-in-one:1.60
+    container_name: jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"
+    cpus: "0.50"
+    mem_limit: 384m
+    restart: always
+    logging: *default-logging
+
+  # =========================
+  # 🔹 PROMETHEUS (METRICS + ALERT RULES)
+  # =========================
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: prometheus
+    volumes:
+      - ./monitoring-config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring-config/rules.yml:/etc/prometheus/rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.enable-lifecycle"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "9090:9090"
+    cpus: "0.75"
+    mem_limit: 768m
+    restart: always
+    logging: *default-logging
+
+  # =========================
+  # 🔹 ALERTMANAGER (ROUTING, DEDUP, INHIBITION)
+  # =========================
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: alertmanager
+    volumes:
+      - ./monitoring-config/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "9093:9093"
+    cpus: "0.25"
+    mem_limit: 128m
+    restart: always
+    logging: *default-logging
+
+  # =========================
+  # 🔹 NODE EXPORTER (CLOUD LAYER: AWS EC2 HOST METRICS)
+  # =========================
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: node-exporter
+    command:
+      - "--path.rootfs=/host"
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    cpus: "0.25"
+    mem_limit: 128m
+    restart: always
+    logging: *default-logging
+
+  # =========================
+  # 🔹 BLACKBOX EXPORTER (HYBRID NETWORK PROBES)
+  # =========================
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: blackbox-exporter
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    cpus: "0.25"
+    mem_limit: 64m
+    restart: always
+    logging: *default-logging
+
+  # =========================
+  # 🔹 GRAFANA (DASHBOARDS PROVISIONED AUTOMATICALLY)
+  # =========================
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/dashboards/aiops-overview.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring-config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring-config/grafana/dashboards:/etc/grafana/dashboards:ro
+    depends_on: [prometheus, loki]
+    cpus: "0.75"
+    mem_limit: 512m
+    restart: always
+    logging: *default-logging
+
+  # =========================
+  # 🔹 LOKI (LOGS)
+  # =========================
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki_data:/loki
+    cpus: "0.50"
+    mem_limit: 512m
+    restart: always
+    logging: *default-logging
+
+  # =========================
+  # 🔹 PROMTAIL (LOG SHIPPING)
+  # =========================
+  promtail:
+    image: grafana/promtail:3.1.1
+    container_name: promtail
+    volumes:
+      - ./logs:/var/log/aiops:ro
+      - ./monitoring-config/promtail-config.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on: [loki]
+    cpus: "0.25"
+    mem_limit: 128m
+    restart: always
+    logging: *default-logging
+
+  # =========================
+  # 🔹 MLFLOW (MODEL TRACKING)
+  # =========================
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.12.2
+    container_name: mlflow
+    ports:
+      - "5000:5000"
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:////mlruns/mlflow.db --default-artifact-root /mlruns/artifacts
+    volumes:
+      - mlflow_data:/mlruns
+    cpus: "0.50"
+    mem_limit: 512m
+    restart: always
+    logging: *default-logging
+
+  # =========================
+  # 🔹 AIRFLOW (ORCHESTRATION: remediation workflow + SLA report schedule)
+  # =========================
+  airflow:
+    image: apache/airflow:2.9.1
+    container_name: airflow
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+      - AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL=30
+      - AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - airflow_data:/opt/airflow
+    command: >
+      bash -c "airflow db migrate &&
+               (airflow users create --username admin --password \"$${AIRFLOW_ADMIN_PASSWORD}\" --firstname AIOps --lastname Admin --role Admin --email admin@example.com || true) &&
+               airflow standalone"
+    ports:
+      - "8085:8080"
+    cpus: "1.0"
+    mem_limit: 2g
+    restart: always
+    logging: *default-logging
+
+  # =========================
+  # 🔹 RUNDECK (MANUAL RUNBOOK CONSOLE)
+  # =========================
+  rundeck:
+    image: rundeck/rundeck:5.3.0
+    container_name: rundeck
+    ports:
+      - "4440:4440"
+    environment:
+      - RUNDECK_GRAILS_URL=http://localhost:4440
+    volumes:
+      - rundeck_data:/home/rundeck/server/data
+    cpus: "0.50"
+    mem_limit: 1g
+    restart: always
+    logging: *default-logging
+
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  mlflow_data:
+  airflow_data:
+  rundeck_data:

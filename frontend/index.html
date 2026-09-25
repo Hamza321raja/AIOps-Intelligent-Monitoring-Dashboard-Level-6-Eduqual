@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIOps Intelligent Monitoring Platform</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>AIOps Intelligent Monitoring Platform</h1>
+    <p class="sub">Hybrid cloud: on-prem (Docker) &middot; edge (Kubernetes k3s) &middot; cloud (AWS EC2)</p>
+    <nav id="links"></nav>
+  </header>
+
+  <section class="kpis">
+    <div class="kpi"><span>Backend</span><b id="status">Checking...</b></div>
+    <div class="kpi"><span>Health score</span><b id="k-health">-</b></div>
+    <div class="kpi"><span>Availability (1h)</span><b id="k-sla">-</b></div>
+    <div class="kpi"><span>Error budget</span><b id="k-budget">-</b></div>
+    <div class="kpi"><span>Open incidents</span><b id="k-open">-</b></div>
+    <div class="kpi"><span>MTTR</span><b id="k-mttr">-</b></div>
+    <div class="kpi"><span>Noise reduction</span><b id="k-noise">-</b></div>
+    <div class="kpi"><span>Compliance</span><b id="k-comp">-</b></div>
+  </section>
+
+  <div class="grid">
+    <div class="card">
+      <h3>1. Load generator</h3>
+      <p class="muted">Requests sent: <b id="counter">0</b> &middot; workers: <b id="workers">0</b></p>
+      <button onclick="startLoad(10)">Low (10 rps)</button>
+      <button onclick="startLoad(50)">Medium (50 rps)</button>
+      <button onclick="startLoad(200)">High (200 rps)</button>
+      <button class="stop" onclick="stopLoad()">Stop load</button>
+    </div>
+
+    <div class="card">
+      <h3>2. Fault injection (demo scenarios)</h3>
+      <button onclick="chaos('break')" title="Scenario 1: restart fixes it">App failure</button>
+      <button onclick="chaos('break?persist=1')" title="Scenario 2: restart cannot fix it">Persistent failure</button>
+      <button onclick="chaos('cpu?intensity=0.8&seconds=180')" title="Scale-up fixes it">CPU saturation</button>
+      <button onclick="chaos('cpu?intensity=0.98&seconds=180')" title="Scale-up fails -> rollback">CPU extreme</button>
+      <button onclick="chaos('errors?rate=0.3')">Error spike 30%</button>
+      <button onclick="chaos('latency?ms=1500')" title="Needs human approval">Latency +1.5s</button>
+      <button onclick="chaos('leak')" title="Predictive maintenance">Memory leak</button>
+      <button class="stop" onclick="chaos('reset')">Reset all</button>
+      <p class="muted" id="chaos-state"></p>
+    </div>
+
+    <div class="card">
+      <h3>3. AIOps intelligence</h3>
+      <table class="kv" id="ml"></table>
+    </div>
+
+    <div class="card">
+      <h3>4. Decision &amp; safety</h3>
+      <table class="kv" id="decision"></table>
+    </div>
+
+    <div class="card full">
+      <h3>5. Incidents (RCA, priority, remediation)</h3>
+      <div class="scroll"><table class="list" id="incidents"></table></div>
+    </div>
+
+    <div class="card">
+      <h3>6. Predictive maintenance schedule</h3>
+      <div id="maintenance" class="muted">No risks predicted</div>
+    </div>
+
+    <div class="card">
+      <h3>7. SLA &amp; compliance report</h3>
+      <p class="muted" id="sla-line"></p>
+      <button onclick="loadReport()">Generate SLA report</button>
+      <pre id="report"></pre>
+    </div>
+
+    <div class="card full">
+      <h3>8. Audit trail</h3>
+      <div class="scroll"><table class="list" id="audit"></table></div>
+    </div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

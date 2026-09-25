@@ -1,0 +1,16 @@
+# Build and deploy the edge app on k3s (run on the VM, from this folder)
+docker build -t edge-app:v4 .
+docker save edge-app:v4 | sudo k3s ctr images import -
+sudo k3s kubectl apply -f ../k8s-app.yaml
+sudo k3s kubectl get pods,svc,hpa
+
+# Self-healing demo: break the pod, Kubernetes restarts it (RESTARTS column increases)
+curl http://localhost:30007/break
+sudo k3s kubectl get pods -w
+
+# Rollback demo
+sudo k3s kubectl rollout history deployment/edge-app
+sudo k3s kubectl rollout undo deployment/edge-app
+
+# Metrics spike demo (Prometheus alert EdgeHighCPU)
+curl http://localhost:30007/spike
