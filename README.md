@@ -35,8 +35,8 @@ Intelligent infrastructure monitoring with AIOps, predictive maintenance and aut
 ## Deploy (Ubuntu VM, 8 GB RAM + 4 GB swap recommended)
 
 ```bash
-git clone https://github.com/Hamza321raja/AIOps-Intelligent-Monitoring-Dashboard-Level-6.git
-cd AIOps-Intelligent-Monitoring-Dashboard-Level-6
+git clone https://github.com/Hamza321raja/AIOps-Intelligent-Monitoring-Dashboard-Level-6-Eduqual.git
+cd AIOps-Intelligent-Monitoring-Dashboard-Level-6-Eduqual
 mkdir -p logs && chmod 777 logs
 docker compose up -d --build
 docker compose ps
